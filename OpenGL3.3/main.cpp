@@ -4,18 +4,12 @@
 #include "stb_image.h"
 #include "Shader.h"
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height);
-}
-
-void processInput(GLFWwindow* window, float& valorInversao) {
-	if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-		valorInversao = -1.0f;
-	}
-	else {
-		valorInversao = 1.0f;
-	}
 }
 
 
@@ -25,12 +19,13 @@ int main() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	GLFWwindow* window = glfwCreateWindow(800, 600, "Perdendo a cabeca fazendo textura", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(800, 600, "OpenGL 3.3", NULL, NULL);
 	if (window == NULL) {
 		std::cout << "Erro na criação de janela" << std::endl;
 		glfwTerminate();
 		return-1;
 	}
+
 	glfwMakeContextCurrent(window); // Contexto do glfw
 
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -42,18 +37,21 @@ int main() {
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
 
+
 	float vertices1[] = {
 	//    X		 Y	   Z	   R	 G	   B	   S	 T
-		 0.0f,  0.5f, 0.0f,   1.0f, 1.0f, 1.0f,   0.5f, 1.0f,
-		-0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 0.0f,	  0.0f, 0.0f,
-		 0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 0.0f,   1.0f, 0.0f,
+		 0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 1.0f,   1.0f, 1.0f, // Top right
+		-0.5f, -0.5f, 0.0f,   1.0f, 1.0f, 1.0f,	  0.0f, 0.0f, // Bottom left
+		-0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 1.0f,   0.0f, 1.0f, // Top left
+		 0.5f, -0.5f, 0.0f,   1.0f, 1.0f, 1.0f,   1.0f, 0.0f, // Bottom right
+
 	};
 
 	unsigned int index1[] = {
 		0, 1, 2,
+		0, 1, 3,
 	};
 
-	Shader shaderProgram1("shader.vs", "shader.fs");
 
 	unsigned int VBO, VAO, EBO;
 
@@ -81,15 +79,18 @@ int main() {
 	glEnableVertexAttribArray(2);
 
 
-
 	// Debindar os bufferss
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
 
 	// Textures
-	unsigned int texture;
-	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_2D, texture);
+	stbi_set_flip_vertically_on_load(true);
+	unsigned int texture1, texture2;
+	int width, height, nrChannels;
+
+	glGenTextures(1, &texture1);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture1);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
@@ -97,38 +98,70 @@ int main() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	
-	int width, height, nrChannels;
-	unsigned char* data = stbi_load("container.jpg", &width, &height, &nrChannels, 0);
+	unsigned char* data = stbi_load("crate.jpg", &width, &height, &nrChannels, 0);
 	if (data) {
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data); 
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
 		glGenerateMipmap(GL_TEXTURE_2D);
 	}
 	else {
-		std::cout << "Failed to load texture" << std::endl;
+		std::cout << "Failed to load texture1" << std::endl;
 	}
+
+	glGenTextures(1, &texture2);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, texture2);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	unsigned char* data2 = stbi_load("awesome_face.png", &width, &height, &nrChannels, 0);
+	if (data2) {
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data2);
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}
+	else {
+		std::cout << "Failed to load texture2" << std::endl;
+	}
+
+	Shader shaderProgram1("shader.vs", "shader.fs");
+	shaderProgram1.use();
+	shaderProgram1.setInt("texture1", 0);
+	shaderProgram1.setInt("texture2", 1);
 
 
 	while (!glfwWindowShouldClose(window)) {
-		float valorInversao = 1.0f;
-		processInput(window, valorInversao);
-
 		// Rendering
 		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
-			
+
 		shaderProgram1.use();
-		shaderProgram1.setFloat("scaleY", valorInversao);
 
-
+		glm::mat4 trans = glm::mat4(1.0f);
+		trans = glm::translate(trans, glm::vec3(0.4, -0.4, 0.0));
+		trans = glm::rotate(trans, glm::radians(20.0f), glm::vec3(0.0, 0.0, 1.0));
+		trans = glm::scale(trans, glm::vec3(1.2, 1.2, 1.2));
+		
+		unsigned int transformLoc = glGetUniformLocation(shaderProgram1.ID, "transform");
+		glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
+		
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		glBindTexture(GL_TEXTURE_2D, texture);
+		
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, texture1);
+		
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, texture2);
+
 		glBindVertexArray(VAO);
-		glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, 0);
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
-
+	
 	glfwTerminate();
 	return 0;
 }
